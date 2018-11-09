@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      background: #eee;
+    }
+    #input-canvas {
+      border: solid 1px #999;
+    }
+    .circle {
+      border: solid 1px green;
+    }
+    .cross {
+      border: solid 1px red;
+    }
+  </style>
+</head>
+<body>
+  <h1>○× classifier</h1>
+  <h2>Feed some data.</h2>
+  <canvas width="256" height="256" id="input-canvas"></canvas>
+  <div>
+    <button onclick="addData('circle')">This is ○</button>
+    <button onclick="addData('cross')">This is ✕</button>
+    <button onclick="initCanvas()">Clear</button>
+    <button onclick="train()">Train the model</button>
+    <button onclick="predict()">Predict</button>
+    <button onclick="save()">Save</button>
+  </div>
+  <div id="data"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@0.13.3/dist/tf.min.js"></script>
+  <script>
+    const inputCanvas = document.getElementById('input-canvas');
+    const inputContext = inputCanvas.getContext('2d');
+    const data = document.getElementById('data');
+    const imageSize = 32;
+    const offset = 255 / 2;
+    let predictionModel = null;
+    let isDrawing = false;
+
+    inputCanvas.onmousedown = function (e) {
+      isDrawing = true;
+      inputContext.moveTo(
+        e.clientX - this.offsetLeft, e.clientY - this.offsetTop);
+    };
+
+    inputCanvas.onmousemove = function (e) {
+      if (isDrawing) {
+        inputContext.lineTo(
+          e.clientX - this.offsetLeft, e.clientY - this.offsetTop);
+        inputContext.stroke();
+      }
+    };
+
+    inputCanvas.onmouseup = () => {
+      isDrawing = false;
+    };
+
+    initCanvas = () => {
+      inputContext.clearRect(0, 0, inputCanvas.width, inputCanvas.height);
+      inputContext.fillStyle = '#fff';
+      inputContext.fillRect(0, 0, inputCanvas.width, inputCanvas.height);
+      inputContext.beginPath();
+      inputContext.lineWidth = 10;
+    }
+
+    addData = (label) => {
+      let c = document.createElement('canvas');
+      c.className = label;
+      c.width = imageSize;
+      c.height = imageSize;
+      let ctx = c.getContext('2d');
+      ctx.drawImage(
+        inputCanvas, 0, 0, inputCanvas.width, inputCanvas.height,
+        0, 0, imageSize, imageSize);
+      data.appendChild(c);
+      initCanvas();
+    };
+
+    buildModel = () => {
+      let model = tf.sequential();
+      model.add(tf.layers.conv2d({
+        inputShape: [imageSize, imageSize, 1],
+        kernelSize: 3,
+        filters: 16,
+        activation: 'relu'
+      }));
+      model.add(tf.layers.maxPooling2d({poolSize: 2, strides: 2}));
+      model.add(tf.layers.conv2d({
+        kernelSize: 3,
+        filters: 32,
+        activation: 'relu'
+      }));
+      model.add(tf.layers.maxPooling2d({poolSize: 2, strides: 2}));
+      model.add(tf.layers.flatten({}));
+
+      model.add(tf.layers.dense({units: 32, activation: 'relu'}));
+      model.add(tf.layers.dense({units: 1, activation: 'sigmoid'}));
+      return model;
+    }
+
+    async function train() {
+      predictionModel = buildModel();
+      predictionModel.compile({loss: 'meanSquaredError', optimizer: 'adam'});
+      let inputs = [];
+      let labels = [];
+      document.querySelectorAll('#data canvas').forEach((ele) => {
+        inputs.push(tf.fromPixels(ele, 1).toFloat().sub(offset).div(offset));
+        labels.push(ele.className == 'circle' ? 1 : 0);
+      });
+      inputs = tf.stack(inputs);
+      labels = tf.stack(labels);
+      console.log('training start');
+      const log = await predictionModel.fit(
+        inputs, labels, {epochs: 20, verbose: true});
+      console.log(log);
+    }
+
+    async function predict() {
+      if (predictionModel) {
+        tf.tidy(() => {
+          const c = document.createElement('canvas');
+          c.width = imageSize;
+          c.height = imageSize;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(inputCanvas, 0, 0, inputCanvas.width, inputCanvas.height,
+            0, 0, imageSize, imageSize);
+          const output = predictionModel.predict(
+            tf.expandDims(tf.fromPixels(c, 1).toFloat().sub(offset).div(offset), 0));
+          if (output.dataSync()[0] > 0.5) {
+            alert('This is ○');
+          } else {
+            alert('This is ✕');
+          }
+          c.remove();
+        });
+      } else {
+        alert('Please train the model first.');
+      }
+    }
+
+    async function save() {
+      if (predictionModel) {
+        await predictionModel.save('downloads://mymodel');
+      } else {
+        alert('Please train the model first.');
+      }
+    }
+
+    initCanvas();
+  </script>
+</body>
+</html>
