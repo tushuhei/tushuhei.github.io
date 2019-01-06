@@ -1,4 +1,4 @@
-const canvasElement = document.getElementById('canvas');
+const canvas = document.getElementById('canvas');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
@@ -105,7 +105,4 @@ function init() {
     gl.flush();
     requestAnimationFrame(render);
   }
-}
-
-function onMicrophoneGranted() {
 }
