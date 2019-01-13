@@ -33,8 +33,8 @@ function init() {
       pathElement.setAttribute('d', path.toPathData());
       const totalLength = pathElement.getTotalLength();
       const bbox = path.getBoundingBox();
-      const steps = 1000;
-      let vertices = [];
+      const steps = 200;
+      let points = [];
       let distances = [];
       let spikes = [];
       for (let i = 0; i < steps; i++) {
@@ -43,30 +43,43 @@ function init() {
         let y = -((point.y - bbox.y1) / (bbox.y2 - bbox.y1) * 2 - 1);
         if (i > 0) {
           let diff = Math.hypot(
-            vertices[vertices.length - 2] - x,
-            vertices[vertices.length - 1] - y);
+            points[points.length - 2] - x,
+            points[points.length - 1] - y);
           distances.push(diff);
         }
-        vertices.push(x);
-        vertices.push(y);
+        points.push(x);
+        points.push(y);
       }
       for (let i = 0; i < numSegments - 1; i++) {
         let idx = distances.indexOf(Math.max(...distances));
         spikes.push(idx + 1);
         distances[idx] = -1;
       }
-      spikes.sort((a, b) => a - b);
-      let indices = [0].concat(spikes).concat([steps]);
-      scenePrg.attLocation[0] = gl.getAttribLocation(
-        scenePrg.program, 'position');
+
+      scenePrg.attLocation[0] = gl.getAttribLocation(scenePrg.program, 'position');
       scenePrg.attStride[0] = 2;
       scenePrg.uniLocation[0] = gl.getUniformLocation(scenePrg.program, 'resolution');
       scenePrg.uniType[0] = 'uniform2fv';
       scenePrg.uniLocation[1] = gl.getUniformLocation(scenePrg.program, 'time');
       scenePrg.uniType[1] = 'uniform1f';
+      scenePrg.uniLocation[2] = gl.getUniformLocation(scenePrg.program, 'points');
+      scenePrg.uniType[2] = 'uniform1fv';
+      scenePrg.uniLocation[3] = gl.getUniformLocation(scenePrg.program, 'spikes');
+      scenePrg.uniType[3] = 'uniform1fv';
+
       let VBO = [
-        createVbo(vertices),
+        createVbo([
+          1.0, 1.0,
+          -1.0, 1.0,
+          1.0, -1.0,
+          -1.0, -1.0,
+        ]),
       ];
+      let index = [
+        0, 1, 2, 2, 3, 1
+      ];
+      let IBO = createIbo(index);
+
       gl.clearColor(0.0, 0.0, 0.0, 1.0);
       startTime = Date.now();
       nowTime = 0;
@@ -80,12 +93,11 @@ function init() {
         gl.useProgram(scenePrg.program);
         gl[scenePrg.uniType[0]](scenePrg.uniLocation[0], [canvas.width, canvas.height]);
         gl[scenePrg.uniType[1]](scenePrg.uniLocation[1], nowTime);
-        setAttribute(VBO, scenePrg.attLocation, scenePrg.attStride);
+        gl[scenePrg.uniType[2]](scenePrg.uniLocation[2], points);
+        gl[scenePrg.uniType[3]](scenePrg.uniLocation[3], spikes);
+        setAttribute(VBO, scenePrg.attLocation, scenePrg.attStride, IBO);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.drawArrays(gl.POINTS, 0, vertices.length / 2);
-        for (let i = 1; i < indices.length; i++) {
-          gl.drawArrays(gl.LINE_LOOP, indices[i - 1], indices[i] - indices[i - 1]);
-        }
+        gl.drawElements(gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0);
         gl.flush();
         requestAnimationFrame(render);
       }
