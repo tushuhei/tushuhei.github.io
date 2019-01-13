@@ -124,10 +124,6 @@ function init() {
   ];
   let planeVBO = [createVbo(planePosition)];
   let planeIBO = createIbo(planeIndex);
-  let planeTexCoordVBO = [
-      createVbo(planePosition),
-      createVbo(planeTexCoord)
-  ];
 
   // matrix
   let mMatrix      = mat.identity(mat.create());
